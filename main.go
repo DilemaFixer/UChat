@@ -1,81 +1,63 @@
-package main 
+package main
 
 import (
 	"bufio"
 	"fmt"
-	"net"
 	"os"
+
+	"github.com/DilemaFixer/UChat/src/chat"
 )
 
-func main(){
-	go startServer()
-	go startClient()
-
-	select{}
+func main() {
+	switch os.Args[1] {
+	case "-s":
+		startAsServer()
+	case "-c":
+		startAsClient()
+	default:
+		fmt.Println("Usage: UChat server|client")
+	}
 }
 
-func startServer() {
-	listen , err := net.Listen("tcp" , ":8080")
-	if err != nil {
-		fmt.Println("Error of starting server" , err)
-	}
-
-	for {
-		conn , err := listen.Accept()
+func startAsServer() {
+	chat := chat.NewUServer()
+	chat.Start(":8080")
+	go printRecivingMsg(chat)
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		message := scanner.Text()
+		err := chat.Send(message)
 		if err != nil {
-			fmt.Println("Have error when try accept connection to server :" , err)
-			return
+			fmt.Println(err)
 		}
-		go handlingNewConnection(conn)
 	}
 }
 
-func handlingNewConnection(connection net.Conn){
-	defer connection.Close()
-
-	go func() {
-		buffer := make([]byte,1024)
-		for {
-			n, err := connection.Read(buffer)
-			if err != nil {
-				fmt.Println("Error when read bytes from socket :" , err)
-				return
-			}
-			fmt.Println("Server get from user:" , string(buffer[:n]))
+func printRecivingMsg(c chat.UChat) {
+	for {
+		if !c.IsBusy() {
+			continue
 		}
-	}()
 
-
-	select{}
-}
-
-func startClient(){
-	conn , err := net.Dial("tcp" , "localhost:8080")
-	if err != nil {
-		fmt.Println("Error when try start client :" , err)
-		return
+		msg, err := c.Recive()
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		fmt.Println(msg)
 	}
-
-	defer conn.Close()
-
-	go func() {
-        buffer := make([]byte, 1024)
-        for {
-            n, err := conn.Read(buffer)
-            if err != nil { return }
-            fmt.Printf("User get from server: %s", string(buffer[:n]))
-        }
-    }()
-
-	 go func() {
-        scanner := bufio.NewScanner(os.Stdin)
-        for scanner.Scan() {
-            message := scanner.Text() + "\n"
-            conn.Write([]byte(message))
-        }
-    }()
-
-	select {}
 }
 
-
+func startAsClient() {
+	chat := chat.NewUClient()
+	chat.Start("localhost:8080")
+	go printRecivingMsg(chat)
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		message := scanner.Text()
+		err := chat.Send(message)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}
